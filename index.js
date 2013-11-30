@@ -1,6 +1,8 @@
 var Emitter = require('emitter');
 
-var augments;
+var augments, events = {elements:[],paths:[],event:{}};
+
+var debug;
 
 // Event /////////////////////////////////////////////////////////////////////////////
 var Event = new Emitter({
@@ -67,23 +69,24 @@ var Event = new Emitter({
         // note: Use Event.augment(...); to add user defined event attributes/methods
         return augments ? extend(event,augments) : event; 
     },
-    add: function(el,ev,fn,cap){
-        if(el.addEventListener){
-            el.addEventListener(ev, fn, !!cap);
-        } else if (el.attachEvent){
-            el.attachEvent('on' + ev, fn);
-        }  else el['on' + ev] = fn;
+    bind: function(el,ev,fn,cap){
+        ev = ev.split(' ');
 
-        return el;
+        for(var i = 0, l = ev.length; i < l; i++) attach(el,ev[i],fn,cap);
+    },
+    unbind: function(el,ev,fn){
+        ev = ev.split(' ');
+
+        for(var i = 0, l = ev.length; i < l; i++) detach(el,ev[i],fn);
+    },
+    add: function(el,ev,fn,cap){
+        this.bind(el,ev,fn,cap);
     },
     remove: function(el,ev,fn){
-        if(el.removeEventListener){
-            el.removeEventListener(ev, fn, false);
-        } else if (el.detachEvent){
-            el.detachEvent('on' + ev, fn);
-        } else el['on' + ev] = null;
-
-        return el;
+        this.unbind(el,ev,fn);
+    },
+    debug: function(on){
+        debug = !!on;
     }
 });
 
@@ -111,6 +114,79 @@ Object.defineProperty(Event,'augment',{
     }
 });
 
+function addEventListener(el,ev,fn,cap){
+    if(el.addEventListener){
+        el.addEventListener(ev, fn, !!cap);
+    } else if (el.attachEvent){
+        el.attachEvent('on' + ev, fn);
+    }  else el['on' + ev] = fn;
+
+    return el;
+}
+
+function removeEventListener(el,ev,fn){
+    if(el.removeEventListener){
+        el.removeEventListener(ev, fn, false);
+    } else if (el.detachEvent){
+        el.detachEvent('on' + ev, fn);
+    } else el['on' + ev] = null;
+
+    return el;
+}
+
+function attach(el,ev,fn,cap){
+    var index, path;
+
+    if((index = events.elements.indexOf(el)) < 0){
+        events.elements.push(el);
+        path = elementXPath(el);
+        index = events.paths.push(path) -1;
+    } else path = events.paths[index];
+
+    if(!events.event[path]) events.event[path] = [];
+
+    if(events.event[path].indexOf(ev) < 0){
+        events.event[path].push(ev);
+        addEventListener(el,ev,dispatch,cap);
+    } 
+
+    path = path + '<'+ev+'>';
+
+    if(debug) console.log("attach(%s):", index, path);
+
+    Event.on(path,fn);
+}
+
+function dispatch(event){
+    var index, path;
+
+    event = Event.normalize(event);
+
+    if((index = events.elements.indexOf(this)) < 0){
+        throw new Error("Dispatch failed: unknown element");
+    }
+
+    path = events.paths[index] + '<'+event.type+'>';
+
+    if(debug) console.log("dispatch(%s):", index, path);
+
+    Event.emit(path,event);
+}
+
+
+function detach(el,ev,fn){
+    var index, path;
+    if((index = events.elements.indexOf(el)) < 0){
+        throw new Error("Detach failed, unable to locate element");
+    }
+
+    path = events.paths[index] + '<'+ev+'>';
+
+    if(debug) console.log("detach(%s):", index, path);
+
+    Event.off(path,fn);
+}
+
 function extend(e,o) {
     for(var k in o) if(!e[k]) e[k] = o[k];
 
@@ -123,6 +199,29 @@ function clone(ev,o) {
     for (var p in ev) o[p] = ev[p];
 
     return o;
+}
+
+// https://code.google.com/p/fbug/source/browse/branches/firebug1.6/content/firebug/lib.js?spec=svn12950&r=8828#1332
+function elementXPath(el){
+    var i, p = [], tag, index;
+
+    if(el === window) return '';
+    if(el === document) return '/';
+
+    for (; el && el.nodeType == 1; el = el.parentNode){
+        i = 0;
+        for (var n = el.previousSibling; n; n = n.previousSibling){
+            if (n.nodeType == Node.DOCUMENT_TYPE_NODE) continue;
+
+            if (n.nodeName == el.nodeName) ++i;
+        }
+
+        tag = el.nodeName.toLowerCase();
+        index = (i ? "[" + (i+1) + "]" : "");
+        p.splice(0, 0, tag + index);
+    }
+
+    return p.length ? "/" + p.join("/") : null;
 }
 
 module.exports = Event; 

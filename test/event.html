@@ -11,32 +11,26 @@
 		var header = document.getElementById('header');
 
 		Event.bind(window,'load',function(){
-			console.log("delegate");
-			Event.delegate(header,'click',clicked1);
+			Event.bind(header,'click',clicked1);
 		});
 
-		function clicked1(event){console.log("delegate(): click"); makeBound(event.target)};
-		function clicked2(event){console.log("bind(): click");makeAttached(event.target)};
-		function clicked3(event){console.log("add(): click");makeUnattached(event.target)};
+		function clicked1(event){console.log("bind(): click"); makeBound(event.target)};
+		function clicked2(event){console.log("add(): click");makeAttached(event.target)};
+		function clicked3(event){console.log("remove(): click");makeUnattached(event.target)};
 
 		function makeBound(elem){
-			console.log("undelegate");
-			Event.undelegate(elem,'click',clicked1);
-			console.log("bind");
-			Event.bind(elem,'click',clicked2);
+			Event.unbind(elem,'click',clicked1);
+			Event.add(elem,'click',clicked2);
 		}
 
 		function makeAttached(elem){
-			console.log("unbind");
 			Event.unbind(elem,'click',clicked2);
-			console.log("add");
 			Event.add(elem,'click',clicked3);
 		}
 
 		function makeUnattached(elem){
-			console.log("removed");
 			Event.remove(elem,'click',clicked3);
-			Event.delegate(elem,'click',clicked1);
+			Event.add(elem,'click',clicked1);
 		}
 
 
