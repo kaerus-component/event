@@ -1,7 +1,5 @@
 var Emitter = require('emitter');
 
-var augments, events = {elements:[],paths:[],event:{}};
-
 var debug;
 
 // Event /////////////////////////////////////////////////////////////////////////////
@@ -65,56 +63,31 @@ var Event = new Emitter({
             }
             // mouse scroll
             event.wheelDelta = event.wheelDelta || -event.Detail * 40; 
-        }    
-        // note: Use Event.augment(...); to add user defined event attributes/methods
-        return augments ? extend(event,augments) : event; 
+        }
+
+        return event; 
     },
     bind: function(el,ev,fn,cap){
-        ev = ev.split(' ');
+        ev = ev.toLowerCase().split(' ');
 
         for(var i = 0, l = ev.length; i < l; i++) attach(el,ev[i],fn,cap);
     },
     unbind: function(el,ev,fn){
-        ev = ev.split(' ');
+        ev = ev.toLowerCase().split(' ');
 
         for(var i = 0, l = ev.length; i < l; i++) detach(el,ev[i],fn);
     },
-    add: function(el,ev,fn,cap){
-        this.bind(el,ev,fn,cap);
-    },
-    remove: function(el,ev,fn){
-        this.unbind(el,ev,fn);
+    path: function(el){
+        return xpath(el);
     },
     debug: function(on){
         debug = !!on;
     }
 });
 
-Object.defineProperty(Event,'augment',{
-    get: function(){
-        return augments;
-    },
-    set: function(o,r){
-        if(typeof o === 'string' && r) {
-            if(augments && augments.hasOwnProperty(o))
-                delete augments[o];
-        }
-
-        if(typeof o === 'function' && o.name){
-           r = {};
-           r[o.name] = o;
-           o = r; 
-        }
-
-        if(typeof o !== 'object') return;
-
-        if(!augments) augments = Object.create(null);
-
-        return extend(augments,o);
-    }
-});
-
 function addEventListener(el,ev,fn,cap){
+    "use strict"
+
     if(el.addEventListener){
         el.addEventListener(ev, fn, !!cap);
     } else if (el.attachEvent){
@@ -125,6 +98,8 @@ function addEventListener(el,ev,fn,cap){
 }
 
 function removeEventListener(el,ev,fn){
+    "use strict"
+
     if(el.removeEventListener){
         el.removeEventListener(ev, fn, false);
     } else if (el.detachEvent){
@@ -134,66 +109,139 @@ function removeEventListener(el,ev,fn){
     return el;
 }
 
-function attach(el,ev,fn,cap){
-    var index, path;
+var events = { elements:[], paths:[], event: Object.create(null) };
 
-    if((index = events.elements.indexOf(el)) < 0){
-        events.elements.push(el);
+function xpath(el){
+    "use strict"
+
+    var path, 
+        index = events.elements.indexOf(el);
+
+    if(index < 0){
         path = elementXPath(el);
-        index = events.paths.push(path) -1;
-    } else path = events.paths[index];
+        
+        if(path === undefined || path === null)
+            throw new Error("unknown element path!");
 
-    if(!events.event[path]) events.event[path] = [];
+        index = events.paths.push(path);
+        
+        if(events.elements.push(el) !== index)
+            throw new Error("event table missalignment!");
 
-    if(events.event[path].indexOf(ev) < 0){
-        events.event[path].push(ev);
-        addEventListener(el,ev,dispatch,cap);
-    } 
+        if(debug) console.log("register path(%s):", index ,path);
+
+    } else {
+        path = events.paths[index];
+    }
+
+    return path;
+}
+
+function xevent(path){
+    "use strict"
+
+    var ev = events.event[path];
+
+    if(!ev){ 
+        ev = events.event[path] = Object.create(null);
+        ev.types = [];
+    }
+
+    return ev;
+}
+
+function attach(el,ev,fn,cap){
+    "use strict"
+
+    var path, event;
+
+    path = xpath(el);
+
+    event = xevent(path);
+
+    if(event.types.indexOf(ev) < 0){
+        event.types.push(ev);
+        addEventListener(el,ev,dispatch,cap); 
+    }
 
     path = path + '<'+ev+'>';
 
-    if(debug) console.log("attach(%s):", index, path);
+    if(typeof fn === 'object'){
+        if(!event.augment) event.augment = Object.create(null);
+        
+        if(!event.augment[ev]) event.augment[ev] = Object.create(null);
 
-    Event.on(path,fn);
+        if(debug) console.log("augment:", path, fn);
+        
+        extend(event.augment[ev],fn);
+
+        fn = fn.listener;
+    } 
+
+    if(typeof fn === 'function') {
+        if(debug) console.log("attach:", path);
+
+        Event.on(path,fn);
+    }
 }
 
 function dispatch(event){
-    var index, path;
+    "use strict"
 
-    event = Event.normalize(event);
+    var path, augment;
 
-    if((index = events.elements.indexOf(this)) < 0){
-        throw new Error("Dispatch failed: unknown element");
-    }
+    path = xpath(this);
 
-    path = events.paths[index] + '<'+event.type+'>';
+    augment = events.event[path].augment;
 
-    if(debug) console.log("dispatch(%s):", index, path);
+    event = Event.normalize(event); 
 
-    Event.emit(path,event);
+    path+= '<'+event.type+'>';
+
+    if(debug) console.log("dispatch:", path);
+
+    if(augment && augment[event.type]) extend(event,augment[event.type]);
+    
+    if(Object.freeze) Object.freeze(event);
+
+    Event.emit(this,path,event);
 }
 
 
 function detach(el,ev,fn){
-    var index, path;
-    if((index = events.elements.indexOf(el)) < 0){
-        throw new Error("Detach failed, unable to locate element");
-    }
+    "use strict"
 
-    path = events.paths[index] + '<'+ev+'>';
+    var path, event;
 
-    if(debug) console.log("detach(%s):", index, path);
+    path = xpath(el);
+
+    event = xevent(path);
+
+    path+= '<'+ev+'>';
+
+    if(debug) console.log("detach: %s with listeners(%s)", path, Event.listeners(path).length);
 
     Event.off(path,fn);
+
+    if(!Event.hasListeners(path)) {
+        index = event.types.indexOf(ev);
+        if(index >= 0){
+            event.types.splice(index,1);
+        }
+    }
 }
 
 function extend(e,o) {
+    "use strict"
+
     for(var k in o) if(!e[k]) e[k] = o[k];
 
     return e;
 }
 
 function clone(ev,o) {
+    "use strict"
+
     o = o ? o : Object.create(null);
 
     for (var p in ev) o[p] = ev[p];
@@ -201,27 +249,28 @@ function clone(ev,o) {
     return o;
 }
 
-// https://code.google.com/p/fbug/source/browse/branches/firebug1.6/content/firebug/lib.js?spec=svn12950&r=8828#1332
 function elementXPath(el){
-    var i, p = [], tag, index;
+    "use strict"
+
+    var i, n, path = [], tag, index;
 
     if(el === window) return '';
     if(el === document) return '/';
 
-    for (; el && el.nodeType == 1; el = el.parentNode){
+    for(;el && el.nodeType == 1;el = el.parentNode){
         i = 0;
-        for (var n = el.previousSibling; n; n = n.previousSibling){
+        
+        for(n = el.previousSibling; n; n = n.previousSibling){
             if (n.nodeType == Node.DOCUMENT_TYPE_NODE) continue;
-
-            if (n.nodeName == el.nodeName) ++i;
+            if (n.nodeName == el.nodeName) i=i+1;
         }
 
         tag = el.nodeName.toLowerCase();
-        index = (i ? "[" + (i+1) + "]" : "");
-        p.splice(0, 0, tag + index);
+        index = (i ? '[' + i + ']' : '');
+        path.splice(0, 0, tag + index);
     }
 
-    return p.length ? "/" + p.join("/") : null;
+    return path.length ? '/' + path.join('/') : null;
 }
 
 module.exports = Event; 

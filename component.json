@@ -1,13 +1,13 @@
 {
   "name": "event",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "repo": "kaerus-component/event",
   "description": "DOM events",
   "scripts": [
     "index.js"
   ],
   "dependencies": {
-    "kaerus-component/emitter": "*"
+    "kaerus-component/emitter": "0.1.6"
   },
   "license": "Apache2_0"
 }

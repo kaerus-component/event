@@ -1,39 +1,66 @@
 <!doctype html>
 <html>
+	<meta charset="utf-8"/>
 	<head><title>Event tests</title></head>
 	<script src="../build/build.js"></script>
 <body>
 <h1 id='header'>Event tests</h1>
+<div id='content'>
+	<ul>
+		<li>item1</li>
+		<li>item2</li>
+	</ul>
+	<form name="testform" action="#">
+		<p><input type="text" name="email" placeholder="email"/></p>
+		<p><input type="textarea" name="message" rows="2" cols="40" placeholder="message"/></p>
+		<p><button type="submit">Submit</button></p>
+	</form>
+	<details>
+		<summary>More details</summary>
+		<ul>
+			<li>test1</li>
+			<li>test2</li>
+		</ul>
+	</detail>
+</div>
 
 	<script>
 		Event = require('event');
 
+		Event.debug(true);
+
 		var header = document.getElementById('header');
 
 		Event.bind(window,'load',function(){
-			Event.bind(header,'click',clicked1);
+			Event.bind(header,'click',clickedHeader);
 		});
 
-		function clicked1(event){console.log("bind(): click"); makeBound(event.target)};
-		function clicked2(event){console.log("add(): click");makeAttached(event.target)};
-		function clicked3(event){console.log("remove(): click");makeUnattached(event.target)};
-
-		function makeBound(elem){
-			Event.unbind(elem,'click',clicked1);
-			Event.add(elem,'click',clicked2);
+		function clickedHeader(event){
+			console.log("%s<%s>:",Event.path(this), event.type, this.innerHTML);
 		}
 
-		function makeAttached(elem){
-			Event.unbind(elem,'click',clicked2);
-			Event.add(elem,'click',clicked3);
+		Event.bind(document,'change',function(event){
+			console.log("%s<%s>:",Event.path(this), event.type, this.value);
+		});
+
+		Event.bind(document.querySelector('form'),'submit',{
+			validate: {
+				email: 'test@test.com'
+			},
+			listener:submitted
+		});
+		
+		function submitted(event){
+			console.log("submitted", this);
+			event.preventDefault();
+			event.stopPropagation();
+				
+			if(this.email.value === event.validate.email){
+				console.log("Correct email!");
+			} else {
+				console.log("wrong email!");
+			} 
 		}
-
-		function makeUnattached(elem){
-			Event.remove(elem,'click',clicked3);
-			Event.add(elem,'click',clicked1);
-		}
-
-
 
 	</script>
 </body>
