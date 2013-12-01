@@ -77,6 +77,30 @@ var Event = new Emitter({
 
         for(var i = 0, l = ev.length; i < l; i++) detach(el,ev[i],fn);
     },
+    delegate: function(el,ev,fn){
+        var path = xpath(el);
+
+        ev = ev.toLowerCase().split(' ');
+
+        for(var i = 0, l = ev.length; i < l; i++){ 
+            attach(document,ev[i],delegate,true);
+            Event.on(path + '<'+ev[i]+'>',fn);
+        }
+    },
+    undelegate: function(el,ev,fn){
+        var p, path = xpath(el);
+        
+        ev = ev.toLowerCase().split(' ');
+
+        for(var i = 0, l = ev.length; i < l; i++){ 
+            p = path + '<'+ev[i]+'>';
+            Event.off(p,fn);
+
+            if(!Event.hasListeners(p))
+                detach(document,ev[i],delegate);
+        }
+
+    },
     path: function(el){
         return xpath(el);
     },
@@ -200,10 +224,10 @@ function dispatch(event){
 
     if(debug) console.log("dispatch:", path);
 
-    if(augment && augment[event.type]) extend(event,augment[event.type]);
+    if(augment && augment[event.type]){ 
+        extend(event,augment[event.type]);
+    }
     
-    if(Object.freeze) Object.freeze(event);
-
     Event.emit(this,path,event);
 }
 
@@ -229,6 +253,18 @@ function detach(el,ev,fn){
             event.types.splice(index,1);
         }
     }
+}
+
+function delegate(event){
+    "use strict"
+
+    var path = xpath(event.target);
+
+    path+= '<'+event.type+'>';
+
+    if(debug) console.log("delegate:", path);
+
+    Event.emit(event.target,path,event);
 }
 
 function extend(e,o) {
@@ -273,4 +309,4 @@ function elementXPath(el){
     return path.length ? '/' + path.join('/') : null;
 }
 
-module.exports = Event; 
+module.exports = Object.freeze ? Object.freeze(Event) : Event; 

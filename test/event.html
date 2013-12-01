@@ -32,11 +32,12 @@
 		var header = document.getElementById('header');
 
 		Event.bind(window,'load',function(){
-			Event.bind(header,'click',clickedHeader);
+			Event.delegate(header,'click',clickedHeader);
 		});
 
 		function clickedHeader(event){
 			console.log("%s<%s>:",Event.path(this), event.type, this.innerHTML);
+			//Event.delegate(document,'click');
 		}
 
 		Event.bind(document,'change',function(event){
