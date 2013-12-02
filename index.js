@@ -39,7 +39,7 @@ var Event = new Emitter({
             }; 
             event.isImmediatePropagationStopped = returnFalse;
             // Handle mouse position 
-            if (event.clientX != null) {
+            if (event.clientX !== null) {
                 var doc = document.documentElement, 
                     body = document.body;
 
@@ -58,7 +58,7 @@ var Event = new Emitter({
             // Handle key presses 
             event.which = event.charCode || event.keyCode;
             // Fix button for mouse clicks: // 0 == left; 1 == middle; 2 == right
-            if (event.button != null) {
+            if (event.button !== null) {
                 event.button = (event.button & 1 ? 0 : (event.button & 4 ? 1 : (event.button & 2 ? 2 : 0)));
             }
             // mouse scroll
@@ -68,11 +68,17 @@ var Event = new Emitter({
         return event; 
     },
     bind: function(el,ev,fn,cap){
+        return addEventListener(el,ev,fn,cap);
+    },
+    unbind: function(el,ev,fn){
+        return removeEventListener(el,ev,fn);
+    },
+    add: function(el,ev,fn,cap){
         ev = ev.toLowerCase().split(' ');
 
         for(var i = 0, l = ev.length; i < l; i++) attach(el,ev[i],fn,cap);
     },
-    unbind: function(el,ev,fn){
+    remove: function(el,ev,fn){
         ev = ev.toLowerCase().split(' ');
 
         for(var i = 0, l = ev.length; i < l; i++) detach(el,ev[i],fn);
@@ -210,7 +216,6 @@ function attach(el,ev,fn,cap){
 }
 
 function dispatch(event){
-    "use strict"
 
     var path, augment;
 
