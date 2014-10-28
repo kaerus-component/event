@@ -1,10 +1,11 @@
 {
   "name": "event",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "repo": "kaerus-component/event",
   "description": "DOM events",
   "scripts": [
-    "index.js"
+    "index.js",
+    "shims/weakmap.js"
   ],
   "dependencies": {
     "kaerus-component/emitter": "0.1.6"

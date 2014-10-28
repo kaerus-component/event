@@ -17,7 +17,7 @@
 	</form>
 	<details>
 		<summary>More details</summary>
-		<ul>
+		<ul id="details">
 			<li>test1</li>
 			<li>test2</li>
 		</ul>
@@ -40,15 +40,19 @@
 			//Event.delegate(document,'click');
 		}
 
-		Event.bind(document,'change',function(event){
-			console.log("%s<%s>:",Event.path(this), event.type, this.value);
+		Event.add(document,'change',function(event){
+			console.log("<%s>:",event.type, event.target.value);
 		});
 
-		Event.bind(document.querySelector('form'),'submit',{
+		Event.add(document.querySelector('form'),'submit',{
 			validate: {
 				email: 'test@test.com'
 			},
 			listener:submitted
+		});
+
+		Event.delegate(document.querySelector('#details li'),"click",function(event){
+			console.log("%s<%s>:",Event.path(this), event.type, this.innerHTML);
 		});
 		
 		function submitted(event){

@@ -1,71 +1,73 @@
-var Emitter = require('emitter');
+require('./shims/weakmap');
 
-var debug;
+var Emitter = require('emitter'),
+    elements = new WeakMap(),
+    debug;
 
 // Event /////////////////////////////////////////////////////////////////////////////
 var Event = new Emitter({
     normalize: function(event) {
-        // normalize 'inspired' from Secrets of the Javascript Ninja by John Resig 
-        // Reference http://www.quirksmode.org/dom/events/ 
-        function returnTrue() { return true; } 
+        // normalize 'inspired' from Secrets of the Javascript Ninja by John Resig
+        // Reference http://www.quirksmode.org/dom/events/
+        function returnTrue() { return true; }
         function returnFalse() { return false; }
 
-        if (!event || !event.stopPropagation) { 
-            // Clone the old object so that we can modify the values 
+        if (!event || !event.stopPropagation) {
+            // Clone the old object so that we can modify the values
             event = clone(event || window.event);
 
-            // The event occurred on this element 
+            // The event occurred on this element
             if (!event.target) {
                 event.target = event.srcElement || document;
             }
-            // Handle which other element the event is related to 
+            // Handle which other element the event is related to
             event.relatedTarget = event.fromElement === event.target ? event.toElement : event.fromElement;
-            // Stop the default browser action 
+            // Stop the default browser action
             event.preventDefault = function () {
-                event.returnValue = false; 
+                event.returnValue = false;
                 event.isDefaultPrevented = returnTrue;
-            }; 
+            };
             event.isDefaultPrevented = returnFalse;
-            // Stop the event from bubbling 
+            // Stop the event from bubbling
             event.stopPropagation = function () {
-                event.cancelBubble = true; 
+                event.cancelBubble = true;
                 event.isPropagationStopped = returnTrue;
-            }; 
+            };
             event.isPropagationStopped = returnFalse;
-            // Stop the event from bubbling and executing other handlers 
+            // Stop the event from bubbling and executing other handlers
             event.stopImmediatePropagation = function () {
-                this.isImmediatePropagationStopped = returnTrue; 
+                this.isImmediatePropagationStopped = returnTrue;
                 this.stopPropagation();
-            }; 
+            };
             event.isImmediatePropagationStopped = returnFalse;
-            // Handle mouse position 
+            // Handle mouse position
             if (event.clientX !== null) {
-                var doc = document.documentElement, 
+                var doc = document.documentElement,
                     body = document.body;
 
-                event.pageX = event.clientX + (doc && 
-                        doc.scrollLeft || body && 
-                        body.scrollLeft || 0) - (doc && 
-                        doc.clientLeft || body && 
-                        body.clientLeft || 0);
+                event.pageX = event.clientX + (doc &&
+					       doc.scrollLeft || body &&
+					       body.scrollLeft || 0) - (doc &&
+									doc.clientLeft || body &&
+									body.clientLeft || 0);
 
-                event.pageY = event.clientY + (doc && 
-                        doc.scrollTop || body && 
-                        body.scrollTop || 0) - (doc && 
-                        doc.clientTop || body && 
-                        body.clientTop || 0);
+                event.pageY = event.clientY + (doc &&
+					       doc.scrollTop || body &&
+					       body.scrollTop || 0) - (doc &&
+								       doc.clientTop || body &&
+								       body.clientTop || 0);
             }
-            // Handle key presses 
+            // Handle key presses
             event.which = event.charCode || event.keyCode;
             // Fix button for mouse clicks: // 0 == left; 1 == middle; 2 == right
             if (event.button !== null) {
                 event.button = (event.button & 1 ? 0 : (event.button & 4 ? 1 : (event.button & 2 ? 2 : 0)));
             }
             // mouse scroll
-            event.wheelDelta = event.wheelDelta || -event.Detail * 40; 
+            event.wheelDelta = event.wheelDelta || -event.Detail * 40;
         }
 
-        return event; 
+        return event;
     },
     bind: function(el,ev,fn,cap){
         return addEventListener(el,ev,fn,cap);
@@ -84,22 +86,37 @@ var Event = new Emitter({
         for(var i = 0, l = ev.length; i < l; i++) detach(el,ev[i],fn);
     },
     delegate: function(el,ev,fn){
-        var path = xpath(el);
+        var p, element = mapElement(el);
+
+        if(!element){
+            if(debug) console.debug("[delegate]: invalid element");
+            return;
+        }
 
         ev = ev.toLowerCase().split(' ');
 
-        for(var i = 0, l = ev.length; i < l; i++){ 
+        for(var i = 0, l = ev.length; i < l; i++){
             attach(document,ev[i],delegate,true);
-            Event.on(path + '<'+ev[i]+'>',fn);
+
+            p = element.path+'<'+ev[i]+'>';
+
+            if(debug) console.debug("[delegate]:", p);
+
+            Event.on(p,fn);
         }
     },
     undelegate: function(el,ev,fn){
-        var p, path = xpath(el);
-        
+        var p, element = elements.get(el);
+
+        if(!element){
+            if(debug) console.debug("[undelegate] ignoring:", elementXPath(el));
+            return;
+        }
+
         ev = ev.toLowerCase().split(' ');
 
-        for(var i = 0, l = ev.length; i < l; i++){ 
-            p = path + '<'+ev[i]+'>';
+        for(var i = 0, l = ev.length; i < l; i++){
+            p = element.path + '<'+ev[i]+'>';
             Event.off(p,fn);
 
             if(!Event.hasListeners(p))
@@ -108,7 +125,8 @@ var Event = new Emitter({
 
     },
     path: function(el){
-        return xpath(el);
+        var element = elements.get(el);
+        return element ? element.path : undefined;
     },
     debug: function(on){
         debug = !!on;
@@ -116,7 +134,7 @@ var Event = new Emitter({
 });
 
 function addEventListener(el,ev,fn,cap){
-    "use strict"
+    "use strict";
 
     if(el.addEventListener){
         el.addEventListener(ev, fn, !!cap);
@@ -128,7 +146,7 @@ function addEventListener(el,ev,fn,cap){
 }
 
 function removeEventListener(el,ev,fn){
-    "use strict"
+    "use strict";
 
     if(el.removeEventListener){
         el.removeEventListener(ev, fn, false);
@@ -139,141 +157,115 @@ function removeEventListener(el,ev,fn){
     return el;
 }
 
-var events = { elements:[], paths:[], event: Object.create(null) };
+function mapElement(el){
+    "use strict";
 
-function xpath(el){
-    "use strict"
+    var p, element = elements.get(el);
 
-    var path, 
-        index = events.elements.indexOf(el);
+    if(!element){
+        p = elementXPath(el);
 
-    if(index < 0){
-        path = elementXPath(el);
-        
-        if(path === undefined || path === null)
-            throw new Error("unknown element path!");
+        if(p === undefined || p === null)
+            throw "[mapElement]: undefined path";
 
-        index = events.paths.push(path);
-        
-        if(events.elements.push(el) !== index)
-            throw new Error("event table missalignment!");
+        element = { path: p, event: {} };
 
-        if(debug) console.log("register path(%s):", index ,path);
+        elements.set(el,element);
 
-    } else {
-        path = events.paths[index];
+        if(debug) console.debug("[mapElement]:", p);
     }
 
-    return path;
-}
-
-function xevent(path){
-    "use strict"
-
-    var ev = events.event[path];
-
-    if(!ev){ 
-        ev = events.event[path] = Object.create(null);
-        ev.types = [];
-    }
-
-    return ev;
+    return element;
 }
 
 function attach(el,ev,fn,cap){
-    "use strict"
+    "use strict";
 
-    var path, event;
+    var p, element = elements.get(el);
 
-    path = xpath(el);
+    if(!element) element = mapElement(el);
 
-    event = xevent(path);
+    p = element.path + '<'+ev+'>';
 
-    if(event.types.indexOf(ev) < 0){
-        event.types.push(ev);
-        addEventListener(el,ev,dispatch,cap); 
+    if(!element.event[ev]){
+        addEventListener(el,ev,dispatch,cap);
+        element.event[ev] = Object.create(null);
     }
 
-    path = path + '<'+ev+'>';
-
     if(typeof fn === 'object'){
-        if(!event.augment) event.augment = Object.create(null);
-        
-        if(!event.augment[ev]) event.augment[ev] = Object.create(null);
+        if(debug) console.debug("[augment]:", p, fn);
 
-        if(debug) console.log("augment:", path, fn);
-        
-        extend(event.augment[ev],fn);
+        extend(element.event[ev],fn);
 
         fn = fn.listener;
-    } 
+    }
 
     if(typeof fn === 'function') {
-        if(debug) console.log("attach:", path);
+        if(debug) console.debug("[attach]:", p);
 
-        Event.on(path,fn);
+        Event.on(p,fn);
     }
 }
 
 function dispatch(event){
 
-    var path, augment;
+    event = Event.normalize(event);
 
-    path = xpath(this);
+    var p, ev = event.type, element = elements.get(this);
 
-    augment = events.event[path].augment;
-
-    event = Event.normalize(event); 
-
-    path+= '<'+event.type+'>';
-
-    if(debug) console.log("dispatch:", path);
-
-    if(augment && augment[event.type]){ 
-        extend(event,augment[event.type]);
+    if(!element) {
+        if(debug) console.debug("[dispatch] ignoring: %s<%s>", elementXPath(this), ev);
+        return;
     }
-    
-    Event.emit(this,path,event);
+
+    p = element.path + '<'+ev+'>';
+
+    if(debug) console.debug("[dispatch]:", p);
+
+    if(element.event && element.event[ev]){
+        extend(event,element.event[ev]);
+    }
+
+    Event.emit(this,p,event);
 }
 
 
 function detach(el,ev,fn){
-    "use strict"
+    "use strict";
 
-    var path, event;
+    var p, element = elements.get(el);
 
-    path = xpath(el);
-
-    event = xevent(path);
-
-    path+= '<'+ev+'>';
-
-    if(debug) console.log("detach: %s with listeners(%s)", path, Event.listeners(path).length);
-
-    Event.off(path,fn);
-
-    if(!Event.hasListeners(path)) {
-        index = event.types.indexOf(ev);
-        if(index >= 0){
-            event.types.splice(index,1);
-        }
+    if(!element){
+        if(debug) console.debug("[detach] ignoring: %s<%s>", elementXPath(el), ev);
+        return;
     }
+
+    p = element.path + '<'+ev+'>';
+
+    Event.off(p,fn);
+
+    if(debug) console.debug("[detach](%s): %s", Event.listeners(p).length, p);
 }
 
 function delegate(event){
-    "use strict"
+    "use strict";
 
-    var path = xpath(event.target);
+    var p, element = elements.get(event.target);
 
-    path+= '<'+event.type+'>';
+    if(!element) {
+        if(debug) console.debug("[delegate] ignoring: %s<%s>", elementXPath(event.target),event.type);
+        return;
+    }
 
-    if(debug) console.log("delegate:", path);
+    p = element.path + '<'+event.type+'>';
 
-    Event.emit(event.target,path,event);
+    if(debug) console.debug("[delegate]:", p);
+
+    Event.emit(event.target,p,event);
 }
 
 function extend(e,o) {
-    "use strict"
+    "use strict";
 
     for(var k in o) if(!e[k]) e[k] = o[k];
 
@@ -281,7 +273,7 @@ function extend(e,o) {
 }
 
 function clone(ev,o) {
-    "use strict"
+    "use strict";
 
     o = o ? o : Object.create(null);
 
@@ -290,8 +282,9 @@ function clone(ev,o) {
     return o;
 }
 
+
 function elementXPath(el){
-    "use strict"
+    "use strict";
 
     var i, n, path = [], tag, index;
 
@@ -300,7 +293,7 @@ function elementXPath(el){
 
     for(;el && el.nodeType == 1;el = el.parentNode){
         i = 0;
-        
+
         for(n = el.previousSibling; n; n = n.previousSibling){
             if (n.nodeType == Node.DOCUMENT_TYPE_NODE) continue;
             if (n.nodeName == el.nodeName) i=i+1;
@@ -314,4 +307,4 @@ function elementXPath(el){
     return path.length ? '/' + path.join('/') : null;
 }
 
-module.exports = Object.freeze ? Object.freeze(Event) : Event; 
+module.exports = Object.freeze ? Object.freeze(Event) : Event;
